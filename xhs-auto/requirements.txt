@@ -1,0 +1,4 @@
+# 只有图片排版需要第三方库；驱动浏览器那条链路是纯标准库
+pillow
+numpy
+opencv-python

@@ -1,0 +1,14 @@
+# 登录态与浏览器配置：绝对不要提交
+edge-profile/
+
+# 运行产物
+logs/
+pages/
+research/
+__pycache__/
+*.pyc
+
+# 你自己的内容和记录：每个人自己填
+content.json
+topics.json
+history.json
