@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light" data-size="m">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#f5f7fc">
+<meta name="description" content="小红书图文自动化流水线：把一份 JSON 文案变成 3:4 图文卡片，并自动填进创作服务平台。">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>小红书图文流水线</title>
+<link rel="icon" href="../icons/favicon-64.png">
+<link rel="stylesheet" href="../style.css">
+<style>
+  /* 这一页特有的少量样式 */
+  .hero{padding:22px 18px;border-radius:var(--r-lg);border:1px solid var(--hair);
+        background:linear-gradient(160deg,rgba(91,91,246,.10),rgba(244,63,94,.07) 60%,transparent);
+        box-shadow:var(--sh-2),var(--inner-hi);margin-bottom:12px}
+  .hero h1{margin:0 0 10px;font-size:1.5rem;line-height:1.35;letter-spacing:-.02em;font-weight:700}
+  .hero p{margin:0 0 14px;color:var(--ink-2);font-size:.9rem;line-height:1.75}
+  .hero .btns{display:flex;gap:9px;flex-wrap:wrap}
+  .feat{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  @media (max-width:520px){.feat{grid-template-columns:1fr}}
+  .feat .it{padding:13px;border-radius:var(--r-md);border:1px solid var(--hair);background:var(--surface-1)}
+  .feat .it b{display:flex;align-items:center;gap:7px;font-size:.85rem;margin-bottom:6px}
+  .feat .it span{font-size:.78rem;color:var(--ink-2);line-height:1.7}
+  .feat .it i{width:22px;height:22px;border-radius:7px;display:grid;place-items:center;
+              background:linear-gradient(135deg,var(--a1),var(--a2));color:#fff;font-style:normal;font-size:.7rem}
+  ol.steps{margin:0;padding-left:1.15rem;color:var(--ink-2);font-size:.86rem;line-height:1.85}
+  ol.steps li{margin-bottom:9px}
+  ol.steps b{color:var(--ink)}
+  pre.code{background:var(--surface-3);border:1px solid var(--hair);border-radius:var(--r-sm);
+           padding:11px 13px;overflow-x:auto;font:.79rem/1.75 ui-monospace,Consolas,monospace;
+           color:var(--ink);margin:7px 0}
+  pre.code i{color:var(--ink-3);font-style:normal}
+  .warn{border-color:rgba(244,63,94,.30);background:linear-gradient(135deg,rgba(244,63,94,.08),transparent)}
+  .page-card{display:flex;gap:10px;align-items:flex-start;padding:11px 12px;border-radius:var(--r-md);
+             border:1px solid var(--hair);background:var(--surface-1);margin-bottom:8px;cursor:pointer}
+  .page-card:hover{background:var(--surface-2)}
+  .page-card .no{flex:0 0 auto;width:24px;height:24px;border-radius:8px;display:grid;place-items:center;
+                 font-size:.7rem;font-weight:650;color:#fff;background:linear-gradient(135deg,var(--a1),var(--a2))}
+  .page-card .bd{flex:1;min-width:0;font-size:.84rem;line-height:1.7;white-space:pre-wrap}
+  .page-card .bd u{text-decoration:none;color:var(--ink-3);font-size:.72rem;display:block;margin-bottom:2px}
+  .navlink{font-size:.78rem;color:var(--ink-2);text-decoration:none;padding:8px 11px;border-radius:10px;
+           border:1px solid var(--hair);background:var(--surface-1)}
+  .navlink:hover{color:var(--ink)}
+</style>
+</head>
+<body>
+
+<svg style="display:none" aria-hidden="true" focusable="false">
+  <symbol id="i-book" viewBox="0 0 24 24"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H19v15H6.5A2.5 2.5 0 0 0 4 20.5Z"/><path d="M4 20.5A2.5 2.5 0 0 1 6.5 18H19v3H6.5"/></symbol>
+  <symbol id="i-magic" viewBox="0 0 24 24"><path d="m5 19 9-9"/><path d="M14 5.5 18.5 10"/><path d="M15.5 4 20 8.5"/><path d="m13 3 1 2.5L16.5 6 14 7 13 9.5 12 7 9.5 6 12 5.5Z"/><path d="M5 13.5 6 16l2.5 1L6 18l-1 2.5L4 18l-2.5-1L4 16Z"/></symbol>
+  <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 3.5v11m0 0 4.2-4.2M12 14.5 7.8 10.3"/><path d="M4.5 17.5v1.6A2.4 2.4 0 0 0 6.9 21.5h10.2a2.4 2.4 0 0 0 2.4-2.4v-1.6"/></symbol>
+  <symbol id="i-gear2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2.8v2.4M12 18.8v2.4M4.5 12H2.1M21.9 12h-2.4M6.7 6.7 5 5M19 19l-1.7-1.7M6.7 17.3 5 19M19 5l-1.7 1.7"/></symbol>
+  <symbol id="i-copy2" viewBox="0 0 24 24"><rect x="9" y="9" width="11.5" height="11.5" rx="2.4"/><path d="M5.6 15H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v.6"/></symbol>
+  <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3l7 3v5.5c0 4.3-2.9 7.6-7 9.5-4.1-1.9-7-5.2-7-9.5V6Z"/><path d="m9 12 2 2 4-4"/></symbol>
+</svg>
+
+<div class="wrap">
+  <header class="top">
+    <div class="brand"><span class="logo">书</span>小红书图文流水线</div>
+    <div class="top-actions">
+      <a class="navlink" href="../">聊天参谋</a>
+      <button class="icon-btn" id="btnSize" title="字号" style="font-size:.8125rem;font-weight:650" aria-label="字号">Aa</button>
+      <button class="icon-btn" id="btnTheme" title="外观" aria-label="切换外观"><svg class="i"><use href="#i-magic"/></svg></button>
+      <button class="icon-btn" id="btnCfg" title="设置" aria-label="设置"><svg class="i"><use href="#gear"/></svg></button>
+    </div>
+  </header>
+
+  <div class="banner" id="banner" style="display:none">
+    <div class="bi"><svg class="i"><use href="#i-magic"/></svg></div>
+    <div class="bt">
+      <b>先配一个模型 Key</b>
+      <span>跟「聊天参谋」共用一份配置；填过一次，两边都能用</span>
+    </div>
+    <button class="btn btn-sm btn-primary" id="btnSetup">去设置</button>
+  </div>
+
+  <section class="hero">
+    <h1>把一份 JSON 变成 8 张小红书图文，自动填好等你发布</h1>
+    <p>整套流水线用 Python 标准库 + Edge 调试协议驱动，不需要 Playwright / Selenium，也不上传你的账号信息。
+      中文用代码排版，不会被 AI 画糊；发布默认停在最后一步，由你按发送。</p>
+    <div class="btns">
+      <a class="btn btn-primary" href="https://github.com/lvyangg/lyy/tree/xhs-workflow" target="_blank" rel="noopener">
+        <svg class="i"><use href="#i-download"/></svg>去仓库下载</a>
+      <button class="btn" id="jumpTool"><svg class="i"><use href="#i-magic"/></svg>在线生成文案</button>
+      <a class="btn" href="https://github.com/lvyangg/lyy/tree/xhs-workflow/xhs-auto" target="_blank" rel="noopener">看代码</a>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2><svg class="i"><use href="#i-book"/></svg>它帮你做四件事<span class="ln"></span></h2>
+    <div class="feat">
+      <div class="it"><b><i>1</i>代码排版出图</b><span>标题、正文、页码用 Pillow 画出来，画布 1080×1440（3:4）。字号边距固定，一整套看起来是同一套设计。</span></div>
+      <div class="it"><b><i>2</i>自动填表</b><span>上传图片 → 填标题 → 填正文 → 加标签 → 原创声明 → 内容声明，全在创作服务平台里完成。</span></div>
+      <div class="it"><b><i>3</i>两种视觉风格</b><span>手账风（hand）和深色海报风（poster），改一个字段就切换。</span></div>
+      <div class="it"><b><i>4</i>选题与流水</b><span>选题池 + 发布记录，自动跳过发过的；还能抓同行热门笔记找选题。</span></div>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>三步跑起来<span class="ln"></span><span class="badge">Windows + Edge</span></h2>
+    <ol class="steps">
+      <li><b>拿代码</b>：把仓库的 <code>xhs-auto/</code> 目录下载到本地任意位置。</li>
+      <li><b>登录一次</b>：双击 <code>start_edge.bat</code>，在弹出的 Edge 窗口里扫码登录小红书。
+        这个窗口用的是独立配置目录，<b>不影响你平时用的浏览器</b>，登录态只存在你自己电脑上。</li>
+      <li><b>出图并上传</b>：
+        <pre class="code">pip install -r requirements.txt
+copy content.example.json content.json   <i># 换成你自己的文案</i>
+python render_pages.py                   <i># 出图到 pages/</i>
+python auto_post.py                      <i># 全自动；加 --no-publish 就停在发布前</i></pre>
+      </li>
+    </ol>
+  </section>
+
+  <section class="card warn">
+    <h2><svg class="i"><use href="#i-shield"/></svg>关于账号和数据<span class="ln"></span></h2>
+    <p class="mini" style="line-height:1.85">
+      仓库里<b>不含任何账号信息</b>：登录态在你自己电脑的 <code>edge-profile/</code> 里，已被忽略规则排除。<br>
+      也<b>不带现成文案和选题</b>：<code>content.json</code>、<code>topics.json</code>、<code>history.json</code> 都由使用者自己填，仓库里只放模板。<br>
+      脚本只操作你本机的 Edge，不把数据发往第三方服务器。<br>
+      用自动化操作第三方平台可能违反其用户协议，<b>账号风险自负</b>；建议一天 1-2 篇、发布前人工过一眼。
+    </p>
+  </section>
+
+  <section class="card" id="tool">
+    <h2><svg class="i"><use href="#i-magic"/></svg>在线生成文案<span class="ln"></span><span class="badge" id="badgeModel">未配置</span></h2>
+    <p class="mini" style="line-height:1.75;margin:0 0 12px">
+      填一个选题，它会写出标题、备选标题、正文、标签，并把内容拆成 6 张卡片的文字，
+      最后给你一份可以直接替换 <code>content.json</code> 的文件。
+    </p>
+    <div class="field">
+      <label>选题 / 你想讲的事</label>
+      <input type="text" id="topic" placeholder="例：把 AI 当实习生带了一个月，我踩了 3 个坑">
+    </div>
+    <div class="grid2">
+      <div class="field">
+        <label>写给谁看（选填）</label>
+        <input type="text" id="audience" placeholder="例：刚工作一两年的年轻人">
+      </div>
+      <div class="field">
+        <label>语气（选填）</label>
+        <input type="text" id="tone" placeholder="例：像朋友分享，不端着">
+      </div>
+    </div>
+    <div class="row" style="margin-top:4px">
+      <button class="btn btn-primary" id="btnGen"><svg class="i"><use href="#i-magic"/></svg>生成图文文案</button>
+      <button class="btn" id="btnSample">试试示例</button>
+      <span class="mini" id="genStatus"></span>
+    </div>
+  </section>
+
+  <section class="card" id="outCard" style="display:none">
+    <h2>生成结果<span class="ln"></span><span class="badge" id="outMeta"></span>
+      <button class="link" id="btnAgain2" title="同选题换一版">
+        <svg class="i"><use href="#i-magic"/></svg>换一版</button></h2>
+    <div id="outBody"></div>
+    <div class="row" style="margin-top:12px">
+      <button class="btn btn-sm" id="btnDl"><svg class="i"><use href="#i-download"/></svg>下载 content.json</button>
+      <button class="btn btn-sm" id="btnCopyJson"><svg class="i"><use href="#i-copy2"/></svg>复制 JSON</button>
+      <button class="btn btn-sm" id="btnCopyBody"><svg class="i"><use href="#i-copy2"/></svg>复制正文</button>
+    </div>
+    <div class="hintbox" style="margin-top:10px">
+      把下载到的 <code>content.json</code> 放进 <code>xhs-auto/</code>，然后运行 <code>python render_pages.py</code> 出图，
+      再 <code>python auto_post.py</code> 上传填写。发布按钮永远留给你自己按。
+    </div>
+  </section>
+
+  <section class="card" id="histCard" style="display:none">
+    <h2><svg class="i"><use href="#i-book"/></svg>最近生成的<span class="ln"></span>
+      <button class="link" id="btnClearHist">清空</button></h2>
+    <div id="histList"></div>
+  </section>
+
+  <section class="card">
+    <h2>常见问题<span class="ln"></span></h2>
+    <p class="mini" style="line-height:1.9">
+      <b>提示需要登录？</b> 在弹出的那个 Edge 窗口里扫码，然后重跑脚本。<br>
+      <b>找不到 Edge？</b> 设置环境变量 <code>EDGE_PATH</code> 指向 <code>msedge.exe</code>。<br>
+      <b>找不到标题/正文框？</b> 前端改版了，照 <code>logs/</code> 里的截图改 <code>publish.py</code> 顶部的选择器。<br>
+      <b>能换 Chrome 吗？</b> 能，两者都是 Chromium，调试协议一样，把 <code>EDGE_PATH</code> 指过去即可。
+    </p>
+  </section>
+
+  <div class="foot">
+    代码：<a class="navlink" href="https://github.com/lvyangg/lyy/tree/xhs-workflow" target="_blank" rel="noopener">lvyangg/lyy · xhs-workflow</a>
+    &nbsp;·&nbsp; MIT 许可<br>
+    本站只是介绍和文案生成器，发布动作永远由你自己完成。
+  </div>
+</div>
+
+<div class="scrim" id="scrim"></div>
+<div class="sheet" id="sheetCfg">
+  <div class="sheet-max">
+    <div class="hd"><h3>设置</h3><span class="cls" data-close>完成</span></div>
+    <div class="field">
+      <label>服务商</label>
+      <select id="cfgProvider"></select>
+      <div class="hintbox">跟「聊天参谋」共用同一份配置，在那边填过这里就不用再填。</div>
+    </div>
+    <div class="field">
+      <label>API Key</label>
+      <input type="password" id="cfgKey" placeholder="粘贴你的 key">
+    </div>
+    <div class="grid2">
+      <div class="field"><label>接口地址</label><input type="text" id="cfgBase"></div>
+      <div class="field"><label>模型名</label><input type="text" id="cfgModel"></div>
+    </div>
+    <div class="field">
+      <label>外观</label>
+      <div class="seg" id="segTheme">
+        <span class="glider" style="display:none"></span>
+        <button data-v="light" class="on">明亮</button>
+        <button data-v="dark">深色</button>
+        <button data-v="auto">跟随系统</button>
+      </div>
+    </div>
+    <div class="field">
+      <label>字号</label>
+      <div class="seg" id="segSize">
+        <span class="glider" style="display:none"></span>
+        <button data-v="s">小</button>
+        <button data-v="m" class="on">标准</button>
+        <button data-v="l">大</button>
+      </div>
+    </div>
+    <button class="btn btn-primary btn-block" id="cfgSave">保存</button>
+    <div class="hintbox">只存在你这个浏览器里，不会上传到别处。</div>
+  </div>
+</div>
+<div id="toasts"></div>
+<script src="app.js"></script>
+</body>
+</html>
